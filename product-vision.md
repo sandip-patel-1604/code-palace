@@ -19,6 +19,8 @@ Senior engineers answer it from tribal knowledge — a mental map of the codebas
 | Cursor | AI editing with context window | IDE-locked, no structural model |
 | ast-grep | Structural pattern matching | No semantic understanding |
 | LSP/ctags | Go-to-definition, references | No cross-cutting reasoning |
+| Aider | Repo-map for LLM context (tree-sitter + graph ranking) | Helps AI write code, not humans understand code |
+| Greptile | Full codebase knowledge graph for analysis | Hosted SaaS, sends code to cloud, no offline/TUI |
 
 **The gap**: None of these can answer *"I need to add feature X — what files do I touch, in what order, following which patterns?"* That requires a **causal model** of the codebase, not a search index.
 
@@ -72,7 +74,7 @@ Then cluster and auto-name them. The result: a domain map nobody had to manually
 
 ---
 
-## The Seven Core Commands
+## The Eight Core Commands
 
 ### 1. `palace init` — Zero-Config Fingerprinting
 
@@ -183,6 +185,31 @@ Generates a guided walkthrough for new developers. Every team wants this and nob
 
 Complexity hotspots, dead code, circular dependencies, test gaps, churn analysis, ownership distribution.
 
+### 8. `palace diff` — PR Impact Analysis
+
+```bash
+$ palace diff HEAD~3..HEAD
+
+  Diff Impact: 3 commits, 12 files changed
+
+  Domains affected:
+    Data Pipeline (HIGH) — 7 files, core transform logic modified
+    Auth System (LOW) — 1 config file
+
+  Blast radius:       23 files transitively affected
+  Patterns followed:  ✓ BaseTransformer pattern maintained
+  Patterns violated:  ⚠ New transformer skips validation step (see line 142)
+
+  Suggested tests:
+    tests/pipeline/test_transforms.py
+    tests/pipeline/test_batch.py
+    tests/integration/test_etl_pipeline.py
+
+  Risk: MEDIUM — pipeline domain heavily affected, but tests exist
+```
+
+Understand the impact of any set of changes — in PRs, CI, or local development.
+
 ---
 
 ## The Zero-Dependency Principle
@@ -217,11 +244,13 @@ TUI:               Textual (by the Rich team — gorgeous terminal apps)
 AST Parsing:       tree-sitter (Python bindings, 100+ languages)
 Graph Storage:     DuckDB (embedded, fast, SQL + recursive CTEs for traversal)
 Vector Storage:    LanceDB (embedded, columnar, vector search, no server)
-Embeddings:        ONNX Runtime + StarEncoder (local, no API key)
+Embeddings:        ONNX Runtime + UniXcoder (local, no API key, best code retrieval quality)
+                   Alternative: Nomic Embed Code (fully open-source)
                    Optional: OpenAI/Voyage AI embeddings for higher quality
-LLM:               Claude API (optional, for plan/explain/onboard commands)
+LLM:               Pluggable provider: Claude API, OpenAI API, or Ollama (local, no API key)
+                   (optional — core features work without any LLM)
 Git Analysis:      gitpython or subprocess (git log/blame/diff)
-Language:          Python 3.11+ (largest contributor pool, best ML ecosystem)
+Language:          Python 3.10+ (Ubuntu 18.04 LTS compatible, largest contributor pool)
 Testing:           pytest + hypothesis for property-based testing
 Packaging:         pyproject.toml + hatch, publish to PyPI
 ```
@@ -242,14 +271,23 @@ Packaging:         pyproject.toml + hatch, publish to PyPI
 
 ### What Makes Code Palace Different
 
-| Dimension | Existing Tools | Code Palace |
-|---|---|---|
-| **Approach** | Retrieval (find code) | Reasoning (plan changes) |
-| **Model** | Flat index or single-layer graph | Six-layer palace graph |
-| **Domain understanding** | Manual tagging | Auto-discovered clusters |
-| **Output** | "Here are matching results" | "Here's your ordered change plan" |
-| **Setup** | Config files, servers, API keys | `pip install` + `palace init` |
-| **TUI** | Rarely | First-class interactive explorer |
+| Dimension | Sourcegraph / LSP | Aider | Greptile | Code Palace |
+|---|---|---|---|---|
+| **Approach** | Retrieval (find code) | LLM context feeding | Knowledge graph analysis | Reasoning (plan changes) |
+| **Model** | Flat index | AST repo-map (1 layer) | Codebase knowledge graph | Six-layer palace graph |
+| **Domain understanding** | None | None | API-based | Auto-discovered clusters |
+| **Output** | "Here are matching results" | Better LLM code edits | PR review comments | "Here's your ordered change plan" |
+| **Setup** | Server + config | `pip install` | SaaS + API key | `pip install` + `palace init` |
+| **Privacy** | Self-hosted or cloud | Local | Cloud (code sent to server) | Fully local, zero infrastructure |
+| **TUI** | No | No | No | First-class interactive explorer |
+
+### Key Differentiators
+
+**vs. Aider**: Aider builds a repo-map to help *AI* write code in your repo. Code Palace builds a full mental model to help *YOU* understand any repo. Aider is a pair programmer; Code Palace is a codebase navigator.
+
+**vs. Greptile**: Greptile requires sending your code to their cloud servers. Code Palace runs entirely locally — `pip install`, no server, no API key for core features. Greptile targets enterprise CI/PR review; Code Palace targets individual developer exploration.
+
+**vs. Cursor/Copilot**: IDE-locked, no structural model, no offline capability. Code Palace works in any terminal, on any machine, with any editor.
 
 ### Star-Worthy Factors (Lessons From Top Repos)
 
@@ -261,67 +299,93 @@ Packaging:         pyproject.toml + hatch, publish to PyPI
 | **Solves real daily pain** (like ruff) | The "where do I start?" problem |
 | **Demo-able** (tweetable screenshots) | `palace plan` output is inherently shareable |
 | **Active development** (visible momentum) | Monthly milestones, clear roadmap |
+| **Local-first AI** (like Ollama) | No API key needed, full offline capability |
 
 ---
 
 ## Phased Roadmap
 
-### Phase 1: The Indexer (Month 1) — Ship v0.1
-**Goal**: Parse any codebase into a queryable symbol graph.
+### Phase 1: Foundation + First Impression (Month 1) — Ship v0.1
+**Goal**: Parse any codebase into a queryable symbol graph. Make `palace plan` work without an LLM.
 
-- `palace init` — tree-sitter multi-language parsing (Python, TypeScript, Go, Rust, Java, C++)
+- `palace init` — tree-sitter multi-language parsing (Python, TypeScript, Go, Java)
 - `palace symbols` — list and search symbols
 - `palace deps` — file and symbol dependency queries
+- `palace plan` (structural-only) — file-level change plan without LLM, using graph analysis
 - DuckDB storage with clean schema
-- CLI skeleton with Typer + Rich
+- CLI skeleton with Typer + Rich — beautiful output from day 1
 - Test infrastructure with pytest
-- **Ship to PyPI. Even without AI, a fast structural indexer is useful.**
+- **Ship to PyPI. Even without AI, a fast structural indexer with change plans is useful.**
 
-### Phase 2: The Graph (Month 2) — Ship v0.2
-**Goal**: Auto-discover codebase structure and enable impact analysis.
+### Phase 2: The Star Magnet (Month 2) — Ship v0.2
+**Goal**: Visual exploration + semantic search. This is the launch moment.
 
 - `palace domains` — auto-discovered domain clustering
 - `palace impact` — blast radius analysis via graph traversal
+- `palace explore` — full-screen Textual TUI *(moved up — TUIs are star magnets)*
 - `palace search` — semantic search with local embeddings (LanceDB + ONNX)
-- `palace health` — basic metrics (complexity, churn, dead code detection)
+- `palace diff` — impact analysis on git diff ranges (PR workflow integration)
 - Git history integration (co-change analysis, ownership)
-- **This is where Hacker News / Reddit posts start gaining traction.**
+- **🚀 LAUNCH: HN/Reddit post with GIF of `palace explore` + `palace plan`. This is the viral moment.**
 
-### Phase 3: The Intelligence (Month 3) — Ship v0.3
-**Goal**: LLM-powered reasoning over the palace graph.
+### Phase 3: Intelligence + MCP (Month 3) — Ship v0.3
+**Goal**: LLM-powered reasoning and AI tool integration.
 
-- `palace plan` — task-to-change-plan with Claude API
+- `palace plan` with LLM — full change plans with rationale (Claude / OpenAI / Ollama)
 - `palace explain` — natural language codebase explanations
 - `palace onboard` — auto-generated codebase guide
+- `palace serve` — MCP server mode (use palace as a tool in Claude Code, Cursor, Windsurf)
 - Graceful degradation without API key
 - Pattern detection (how does this codebase implement cross-cutting concerns?)
-- **This is the feature people screenshot and tweet. Viral moment.**
+- **Second viral push: "Now palace plan writes your change plan with AI" + MCP integration demo.**
 
-### Phase 4: The TUI (Month 4) — Ship v0.4
-**Goal**: Visual, interactive codebase exploration.
-
-- `palace explore` — full-screen Textual TUI
-- Visual domain map with drill-down navigation
-- Inline semantic search
-- Relationship and call-chain visualization
-- **Beautiful TUIs are star magnets (lazygit, k9s, btop proved this).**
-
-### Phase 5: Integrations (Months 5-6) — Ship v0.5
+### Phase 4: Ecosystem (Month 4) — Ship v0.4
 **Goal**: Embed Code Palace into developer workflows.
 
+- `palace health` — complexity hotspots, dead code, circular deps, test gaps, churn
 - VS Code extension (sidebar palace explorer)
-- Claude Code MCP server (use palace as a tool in Claude Code)
 - GitHub Actions integration (PR impact analysis in CI)
 - `palace review` — AI-powered PR review grounded in codebase structure
 - `palace watch` — incremental re-indexing on file changes
+- Rust and C++ language support (tree-sitter extractors)
 
-### Phase 6+: Advanced (Months 6+)
+### Phase 5+: Advanced (Months 5+)
 - Multi-repo and monorepo support
 - Architecture pattern detection and enforcement
 - Custom palace configurations and templates
 - Plugin system for language-specific deep analysis
 - LSP server (palace as a language server for any IDE)
 - Team features (shared palaces, expertise mapping)
+
+---
+
+## Launch Strategy
+
+### README as Marketing Page
+
+The README is not documentation — it is a landing page. For record-breaking stars:
+
+1. **Hero section**: Animated GIF/SVG of `palace explore` TUI + `palace plan` output in the first 3 seconds of scrolling
+2. **One-liner install + demo**: `pip install code-palace && cd any-repo && palace init && palace plan "add user authentication"`
+3. **Competitive comparison table**: Show the gap vs. Sourcegraph, Aider, Greptile, Cursor
+4. **"Featured in" badges**: Add after first HN/Reddit feature
+
+### Launch Timeline
+
+| Milestone | Channel | Content |
+|---|---|---|
+| v0.1 release | Twitter/X, Reddit r/python | "Fast codebase indexer with zero-config change plans" |
+| v0.2 release (THE launch) | Hacker News, Reddit r/programming, r/commandline | GIF of `palace explore` TUI + `palace plan` demo |
+| v0.3 release | Twitter/X, AI dev communities | "palace plan now uses AI — and works with Claude Code via MCP" |
+| Ongoing | GitHub Discussions, Discord | Community engagement, feature requests, contributor onboarding |
+
+### Demo Asset Checklist
+
+- [ ] Animated SVG of `palace init` on a real open-source repo (e.g., Flask, FastAPI)
+- [ ] GIF of `palace explore` TUI navigation (the hero image)
+- [ ] Screenshot of `palace plan` output (the tweetable moment)
+- [ ] Side-by-side comparison: "Before Code Palace" (grep + find) vs "After" (palace plan)
+- [ ] 90-second YouTube demo video
 
 ---
 
@@ -346,6 +410,8 @@ code-palace/
         domains.py             # palace domains
         symbols.py             # palace symbols
         deps.py                # palace deps
+        diff.py                # palace diff
+        serve.py               # palace serve (MCP server)
       ui/                      # Rich/Textual TUI components
     core/                      # Core abstractions
       palace.py                # Palace graph orchestrator
@@ -380,6 +446,10 @@ code-palace/
       explainer.py             # Natural language code explanation
       reviewer.py              # PR/change analysis
       onboarder.py             # Codebase onboarding guide generation
+      providers/               # LLM provider implementations
+        claude.py              # Anthropic Claude API
+        openai.py              # OpenAI GPT API
+        ollama.py              # Ollama (local models, no API key)
     storage/                   # Persistence
       store.py                 # Abstract store interface
       duckdb_store.py          # DuckDB graph + metadata storage
@@ -399,15 +469,18 @@ code-palace/
 
 ## Open Questions
 
-<!-- Add your questions and comments here — use Antigravity to annotate -->
+### Resolved Decisions
 
-- [ ] Should `palace plan` require an LLM, or can we build a useful structural-only version?
-- [ ] Local embeddings (ONNX) vs. API embeddings — is the quality gap acceptable for v0.1?
-- [ ] Which languages to support in Phase 1? (Proposed: Python, TypeScript, Go, Rust, Java, C++)
-- [ ] Should the TUI come earlier (Phase 2) since it drives stars?
+- [x] **`palace plan` without LLM?** → Yes. Phase 1 ships structural-only change plans. LLM enhancement adds rationale in Phase 3.
+- [x] **Local embeddings quality?** → Acceptable for v0.1 with UniXcoder. API embeddings optional.
+- [x] **Phase 1 languages?** → Python, TypeScript, Go, Java. Rust and C++ deferred to Phase 4.
+- [x] **TUI timing?** → Moved to Phase 2. TUI GIF is the #1 star driver.
+- [x] **LLM abstraction?** → Pluggable provider protocol: Claude + OpenAI + Ollama (local).
+- [x] **`.palace/` committed?** → Gitignored by default. `palace export` command for team sharing.
+- [x] **MCP vs Claude Code skill?** → MCP server (`palace serve`). Standard protocol, works with all AI tools.
+
+### Open
+
 - [ ] Pricing model for a hosted/SaaS version? Or stay fully open source?
-- [ ] What's the right abstraction for the LLM layer? Support Claude + OpenAI + local models?
 - [ ] How to handle monorepos with mixed languages and build systems?
-- [ ] Should `.palace/` be committed to the repo (shared team knowledge) or gitignored?
-- [ ] MCP server vs. Claude Code skill vs. both for AI assistant integration?
 - [ ] Incremental indexing strategy — how to efficiently update the palace on file changes?
