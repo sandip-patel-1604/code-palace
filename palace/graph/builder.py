@@ -17,6 +17,7 @@ from palace.storage.store import EdgeRecord, FileRecord, ImportRecord, SymbolRec
 class BuildStats:
     """Summary of a completed graph build operation."""
 
+    # Phase 1 — parsing and graph construction
     files: int = 0
     symbols: int = 0
     edges: int = 0
@@ -24,6 +25,10 @@ class BuildStats:
     imports_resolved: int = 0
     errors: list[str] = field(default_factory=list)
     duration_seconds: float = 0.0
+    # Phase 2 — None means the phase was skipped or not yet run
+    commits: int | None = None
+    embeddings: int | None = None
+    domains: int | None = None
 
 
 class GraphBuilder:

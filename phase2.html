@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Palace — Phase 2: The Star Magnet</title>
+<style>
+/* ─── RESET & BASE ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-void:    #080b12;
+  --bg-deep:    #0a0e17;
+  --bg-surface: #0f1520;
+  --bg-panel:   #131926;
+  --bg-lift:    #1a2235;
+  --border:     #1e2d45;
+  --border-dim: #162030;
+
+  --txt-primary: #c8d6ef;
+  --txt-dim:     #607090;
+  --txt-faint:   #3a4d66;
+
+  --green:  #00ff88;
+  --green2: #00cc6a;
+  --cyan:   #00d4ff;
+  --amber:  #ffaa00;
+  --red:    #ff4757;
+  --purple: #a78bfa;
+
+  --font-mono: 'Courier New', 'Lucida Console', monospace;
+  --font-sans: 'SF Pro Display', -apple-system, 'Segoe UI', sans-serif;
+
+  --section-pad: clamp(4rem, 8vw, 8rem);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-void);
+  color: var(--txt-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-x: hidden;
+  cursor: crosshair;
+}
+
+/* ─── SCANLINE OVERLAY ─── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── SCROLL ANIMATIONS ─── */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+
+/* ─── NOISE TEXTURE ─── */
+.noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: rgba(8, 11, 18, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-dim);
+}
+.nav-logo {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--green);
+  text-shadow: 0 0 20px rgba(0,255,136,0.4);
+}
+.nav-logo span { color: var(--txt-dim); }
+.nav-links { display: flex; gap: 2rem; }
+.nav-links a {
+  color: var(--txt-dim);
+  text-decoration: none;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--cyan); }
+.nav-phase {
+  background: var(--purple);
+  color: var(--bg-void);
+  padding: 0.35rem 0.9rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  border: none;
+}
+
+/* ─── HERO ─── */
+#hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6rem 2rem 4rem;
+  overflow: hidden;
+}
+
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(167,139,250,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167,139,250,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: gridDrift 30s linear infinite;
+}
+@keyframes gridDrift {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(40px, 40px); }
+}
+
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+}
+.hero-orb-1 {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(167,139,250,0.1) 0%, transparent 70%);
+  top: -100px; left: -150px;
+  animation: orbPulse 8s ease-in-out infinite;
+}
+.hero-orb-2 {
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(0,255,136,0.06) 0%, transparent 70%);
+  bottom: -50px; right: -100px;
+  animation: orbPulse 10s ease-in-out infinite 2s;
+}
+@keyframes orbPulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 860px;
+}
+
+.hero-prompt {
+  color: var(--purple);
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  margin-bottom: 1.5rem;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.3s forwards;
+}
+.hero-prompt::before { content: '// '; color: var(--txt-faint); }
+
+.hero-title {
+  font-family: var(--font-mono);
+  font-size: clamp(2.5rem, 8vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, #ffffff 0%, #c8d6ef 40%, var(--purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.5s forwards;
+}
+
+.hero-tagline {
+  font-size: clamp(0.9rem, 2.2vw, 1.25rem);
+  color: var(--txt-dim);
+  letter-spacing: 0.02em;
+  margin-bottom: 2.5rem;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.7s forwards;
+}
+.hero-tagline em {
+  color: var(--txt-primary);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.version-badge {
+  display: inline-block;
+  background: var(--bg-lift);
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  font-size: 0.72rem;
+  padding: 0.2rem 0.7rem;
+  letter-spacing: 0.12em;
+  margin-bottom: 2rem;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.6s forwards;
+}
+
+.stats-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 1.1s forwards;
+}
+.stat-item {
+  padding: 0.6rem 1.4rem;
+  border: 1px solid var(--border-dim);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--txt-dim);
+  background: var(--bg-surface);
+  margin: -1px 0 0 -1px;
+  transition: all 0.2s;
+}
+.stat-item:hover { background: var(--bg-panel); color: var(--txt-primary); border-color: var(--border); }
+.stat-item strong { color: var(--green); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── SECTION WRAPPER ─── */
+section {
+  padding: var(--section-pad) clamp(1.5rem, 6vw, 4rem);
+  position: relative;
+}
+section:nth-child(even) { background: var(--bg-deep); }
+section:nth-child(odd)  { background: var(--bg-void); }
+
+.section-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  color: var(--txt-faint);
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+.section-label::before { content: '// '; }
+
+.section-title {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-bottom: 1.25rem;
+  color: #e8f0ff;
+}
+.section-title .cmd { color: var(--green); }
+.section-title .dim { color: var(--txt-dim); }
+
+.section-body {
+  font-size: 0.95rem;
+  color: var(--txt-dim);
+  max-width: 640px;
+  line-height: 1.85;
+}
+.section-body strong { color: var(--txt-primary); }
+
+.section-caption {
+  margin-top: 1.5rem;
+  font-size: 0.82rem;
+  color: var(--txt-faint);
+  max-width: 720px;
+  line-height: 1.7;
+  border-left: 2px solid var(--border);
+  padding-left: 1rem;
+}
+.section-caption strong { color: var(--txt-dim); }
+
+/* ─── TERMINAL BLOCK ─── */
+.terminal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  position: relative;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.5),
+    0 20px 60px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.terminal-bar {
+  background: var(--bg-lift);
+  padding: 0.7rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-dim);
+  user-select: none;
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot-red    { background: #ff5f57; box-shadow: 0 0 6px rgba(255,95,87,0.5); }
+.dot-yellow { background: #ffbd2e; box-shadow: 0 0 6px rgba(255,189,46,0.5); }
+.dot-green  { background: #28ca41; box-shadow: 0 0 6px rgba(40,202,65,0.5); }
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--txt-faint);
+  letter-spacing: 0.08em;
+}
+.terminal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+}
+.terminal-body pre {
+  white-space: pre;
+  font-family: var(--font-mono);
+  margin: 0;
+}
+
+/* Syntax colors */
+.t-prompt { color: var(--green); }
+.t-cmd    { color: var(--cyan); }
+.t-path   { color: var(--amber); }
+.t-key    { color: var(--cyan); }
+.t-val    { color: var(--txt-primary); }
+.t-num    { color: var(--purple); }
+.t-str    { color: var(--amber); }
+.t-dim    { color: var(--txt-faint); }
+.t-green  { color: var(--green); }
+.t-amber  { color: var(--amber); }
+.t-red    { color: var(--red); }
+.t-head   { color: var(--purple); font-weight: 700; }
+.t-border { color: var(--border); }
+
+/* ─── COMMAND CARDS GRID ─── */
+.cmd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1px;
+  background: var(--border-dim);
+  border: 1px solid var(--border-dim);
+  margin-top: 2.5rem;
+}
+.cmd-card {
+  background: var(--bg-surface);
+  padding: 2rem 1.75rem;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+.cmd-card:hover { background: var(--bg-panel); }
+.cmd-card-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.05em;
+}
+.cmd-card-name::before { content: '$ '; color: var(--txt-faint); }
+.cmd-card-desc {
+  font-size: 0.82rem;
+  color: var(--txt-dim);
+  line-height: 1.6;
+}
+.cmd-card-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-lift);
+  border: 1px solid var(--border);
+  color: var(--purple);
+}
+
+/* ─── INFRASTRUCTURE GRID ─── */
+.infra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--border-dim);
+  border: 1px solid var(--border-dim);
+  margin-top: 2.5rem;
+}
+.infra-card {
+  background: var(--bg-surface);
+  padding: 2rem 1.75rem;
+  transition: background 0.3s;
+}
+.infra-card:hover { background: var(--bg-panel); }
+.infra-icon {
+  font-size: 1.2rem;
+  margin-bottom: 0.75rem;
+  color: var(--cyan);
+}
+.infra-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--txt-primary);
+  margin-bottom: 0.5rem;
+}
+.infra-desc {
+  font-size: 0.8rem;
+  color: var(--txt-dim);
+  line-height: 1.7;
+}
+.infra-desc code {
+  color: var(--amber);
+  font-size: 0.78rem;
+}
+
+/* ─── STATS GRID ─── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  background: var(--border-dim);
+  border: 1px solid var(--border-dim);
+  margin-top: 2.5rem;
+}
+.stats-cell {
+  background: var(--bg-surface);
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+  transition: background 0.3s;
+}
+.stats-cell:hover { background: var(--bg-panel); }
+.stats-num {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--green);
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.stats-num.purple { color: var(--purple); }
+.stats-num.cyan { color: var(--cyan); }
+.stats-num.amber { color: var(--amber); }
+.stats-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--txt-dim);
+  text-transform: uppercase;
+}
+
+/* ─── LAYERS DIAGRAM ─── */
+.layers-stack {
+  margin-top: 2.5rem;
+  max-width: 720px;
+}
+.layer-row {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border-dim);
+  margin-top: -1px;
+  transition: background 0.2s;
+}
+.layer-row:hover { background: var(--bg-panel); }
+.layer-num-col {
+  width: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--border);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-dim);
+}
+.layer-content {
+  flex: 1;
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+}
+.layer-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+}
+.layer-detail {
+  font-size: 0.78rem;
+  color: var(--txt-dim);
+  margin-top: 0.25rem;
+}
+.layer-status {
+  width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-dim);
+}
+.layer-status.done { color: var(--green); }
+.layer-status.pending { color: var(--txt-faint); }
+
+/* ─── ROADMAP TEASER ─── */
+.roadmap-box {
+  margin-top: 2.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  padding: 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.roadmap-box::before {
+  content: '3';
+  position: absolute;
+  top: -0.5rem;
+  right: 1rem;
+  font-size: 8rem;
+  font-weight: 700;
+  color: var(--border-dim);
+  line-height: 1;
+  pointer-events: none;
+}
+.roadmap-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--purple);
+  margin-bottom: 1rem;
+  letter-spacing: 0.05em;
+}
+.roadmap-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.roadmap-items li {
+  font-size: 0.85rem;
+  color: var(--txt-dim);
+  padding-left: 1.5rem;
+  position: relative;
+}
+.roadmap-items li::before {
+  content: '>';
+  position: absolute;
+  left: 0;
+  color: var(--purple);
+  font-weight: 700;
+}
+.roadmap-items li strong { color: var(--txt-primary); }
+
+/* ─── FOOTER ─── */
+footer {
+  padding: 3rem 2rem;
+  text-align: center;
+  border-top: 1px solid var(--border-dim);
+  background: var(--bg-void);
+}
+footer p {
+  font-size: 0.78rem;
+  color: var(--txt-faint);
+  letter-spacing: 0.05em;
+}
+footer a {
+  color: var(--txt-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+footer a:hover { color: var(--green); }
+
+/* ─── TWO-COL LAYOUT ─── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+  margin-top: 2.5rem;
+}
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ─── TUI HERO TERMINAL ─── */
+.tui-terminal {
+  margin-top: 2.5rem;
+  border: 2px solid var(--purple);
+  box-shadow: 0 0 40px rgba(167,139,250,0.1), 0 20px 60px rgba(0,0,0,0.6);
+}
+.tui-terminal .terminal-bar { border-bottom-color: var(--purple); }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 600px) {
+  .cmd-grid { grid-template-columns: 1fr; }
+  .infra-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  nav { padding: 0.75rem 1rem; }
+  .nav-links { gap: 1rem; }
+}
+
+/* ─── CURSOR BLINK ─── */
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.1em;
+  background: var(--green);
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── NAV ─── -->
+<nav>
+  <div class="nav-logo">CODE<span>//</span>PALACE</div>
+  <div class="nav-links">
+    <a href="#whats-new">New</a>
+    <a href="#domains">Domains</a>
+    <a href="#impact">Impact</a>
+    <a href="#search">Search</a>
+    <a href="#diff">Diff</a>
+    <a href="#explore">Explore</a>
+    <a href="#infra">Infra</a>
+  </div>
+  <div class="nav-phase">PHASE 2</div>
+</nav>
+
+<!-- ─── HERO ─── -->
+<section id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-orb hero-orb-1"></div>
+  <div class="hero-orb hero-orb-2"></div>
+
+  <div class="hero-content">
+    <div class="hero-prompt">phase 2 shipped</div>
+    <div class="version-badge">v0.2.0 — THE STAR MAGNET</div>
+    <h1 class="hero-title">The Star Magnet</h1>
+    <p class="hero-tagline">
+      <em>Semantic search</em>, <em>domain clustering</em>, <em>blast-radius analysis</em>,
+      <em>git history</em>, and an <em>interactive TUI</em>.<br>
+      All offline. All local. Zero API keys.
+    </p>
+
+    <div class="stats-bar">
+      <div class="stat-item"><strong>9</strong>&ensp;commands</div>
+      <div class="stat-item"><strong>260</strong>&ensp;tests</div>
+      <div class="stat-item"><strong>5</strong>&ensp;languages</div>
+      <div class="stat-item"><strong>0</strong>&ensp;API keys</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── WHAT'S NEW ─── -->
+<section id="whats-new">
+  <div class="section-label reveal">What's New in Phase 2</div>
+  <h2 class="section-title reveal reveal-delay-1">Five new commands. <span class="dim">One vision.</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Phase 1 built the structural graph. Phase 2 makes it <strong>intelligent</strong> &mdash;
+    semantic understanding, temporal analysis, and a visual interface to navigate it all.
+  </p>
+
+  <div class="cmd-grid reveal reveal-delay-3">
+    <div class="cmd-card">
+      <div class="cmd-card-badge">NEW</div>
+      <div class="cmd-card-name">palace domains</div>
+      <div class="cmd-card-desc">Auto-discovered domain clusters via Louvain community detection on the import graph.</div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-card-badge">NEW</div>
+      <div class="cmd-card-name">palace impact</div>
+      <div class="cmd-card-desc">Blast-radius analysis with risk scoring. Combines deps, git ownership, churn, and test coverage.</div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-card-badge">NEW</div>
+      <div class="cmd-card-name">palace search</div>
+      <div class="cmd-card-desc">Semantic code search. Finds code by meaning, not keywords. Powered by ONNX embeddings, fully offline.</div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-card-badge">NEW</div>
+      <div class="cmd-card-name">palace diff</div>
+      <div class="cmd-card-desc">Git diff impact analysis. Shows domains affected, blast radius, risk, and which tests to run.</div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-card-badge">STAR</div>
+      <div class="cmd-card-name">palace explore</div>
+      <div class="cmd-card-desc">Full-screen interactive TUI. Navigate domains, files, symbols. Search from anywhere. The GIF moment.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── DOMAINS ─── -->
+<section id="domains">
+  <div class="section-label reveal">Command</div>
+  <h2 class="section-title reveal reveal-delay-1"><span class="cmd">palace domains</span> <span class="dim">&mdash; Cluster Discovery</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Automatically discover the domain structure of any codebase. No configuration, no manual tagging &mdash;
+    just the <strong>import graph</strong> and <strong>git co-change patterns</strong>.
+  </p>
+
+  <div class="two-col">
+    <div class="terminal reveal reveal-delay-3">
+      <div class="terminal-bar">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <div class="terminal-title">palace domains</div>
+      </div>
+      <div class="terminal-body">
+<pre><span class="t-prompt">$</span> <span class="t-cmd">palace domains</span>
+
+<span class="t-head">Domain Map</span> <span class="t-dim">(3 domains)</span>
+<span class="t-dim">├──</span> <span class="t-green">Auth</span>  <span class="t-dim">(3 files)</span>
+<span class="t-dim">│   ├──</span> <span class="t-val">src/auth/login.py</span>
+<span class="t-dim">│   ├──</span> <span class="t-val">src/auth/session.py</span>
+<span class="t-dim">│   └──</span> <span class="t-val">src/auth/token.py</span>
+<span class="t-dim">├──</span> <span class="t-green">Api</span>  <span class="t-dim">(3 files)</span>
+<span class="t-dim">│   ├──</span> <span class="t-val">src/api/routes.py</span>
+<span class="t-dim">│   ├──</span> <span class="t-val">src/api/handlers.py</span>
+<span class="t-dim">│   └──</span> <span class="t-val">src/api/middleware.py</span>
+<span class="t-dim">└──</span> <span class="t-green">Other</span>  <span class="t-dim">(2 files)</span>
+    <span class="t-dim">├──</span> <span class="t-val">src/config.py</span>
+    <span class="t-dim">└──</span> <span class="t-val">src/main.py</span><span class="cursor"></span></pre>
+      </div>
+    </div>
+    <div class="reveal reveal-delay-4">
+      <div class="section-caption">
+        <strong>Louvain community detection</strong> on the import graph. Co-change frequency from git history adds edge weight &mdash;
+        files that always change together cluster together, even if they don't import each other directly.<br><br>
+        Auto-naming picks the most common directory component. <code>src/auth/*</code> becomes <strong>Auth</strong>.
+        No LLM needed &mdash; pure graph analysis.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── IMPACT ─── -->
+<section id="impact">
+  <div class="section-label reveal">Command</div>
+  <h2 class="section-title reveal reveal-delay-1"><span class="cmd">palace impact</span> <span class="dim">&mdash; Blast Radius</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Before you touch a file, know exactly what breaks. <strong>Direct dependents</strong>, <strong>transitive reach</strong>,
+    <strong>domain impact</strong>, <strong>git ownership</strong>, and a computed <strong>risk score</strong>.
+  </p>
+
+  <div class="two-col">
+    <div class="terminal reveal reveal-delay-3">
+      <div class="terminal-bar">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <div class="terminal-title">palace impact src/core/models.py</div>
+      </div>
+      <div class="terminal-body">
+<pre><span class="t-prompt">$</span> <span class="t-cmd">palace impact</span> <span class="t-path">src/core/models.py</span>
+
+<span class="t-border">╭──────────────</span> <span class="t-head">Impact Analysis</span> <span class="t-border">──────────────╮</span>
+<span class="t-border">│</span>  <span class="t-key">File:</span>       <span class="t-val">core/models.py</span>              <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-key">Risk:</span>       <span class="t-red">HIGH</span>                        <span class="t-border">│</span>
+<span class="t-border">│</span>                                           <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-dim">Direct dependents:</span>     <span class="t-num">14</span>              <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-dim">Transitive dependents:</span> <span class="t-num">47</span>              <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-dim">Domain impact:</span>   <span class="t-amber">Auth (12)</span>, <span class="t-amber">API (3)</span> <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-dim">Primary owner:</span>         <span class="t-val">alice (62%)</span>     <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-dim">Churn (90d):</span>           <span class="t-num">42</span> <span class="t-dim">changes</span>     <span class="t-border">│</span>
+<span class="t-border">│</span>  <span class="t-dim">Test files:</span>            <span class="t-num">3</span>               <span class="t-border">│</span>
+<span class="t-border">╰─────────────────────────────────────────╯</span><span class="cursor"></span></pre>
+      </div>
+    </div>
+    <div class="reveal reveal-delay-4">
+      <div class="section-caption">
+        <strong>Risk scoring formula:</strong><br>
+        <code>score = deps/5 + transitive/20 + churn/10 - tests</code><br><br>
+        HIGH (&ge;5) &mdash; core model, wide blast radius, high churn<br>
+        MEDIUM (&ge;2) &mdash; moderate impact, some coverage<br>
+        LOW (&lt;2) &mdash; leaf file, narrow scope<br><br>
+        <strong>Supports symbol-level targeting:</strong><br>
+        <code>palace impact models.py:User</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── SEARCH ─── -->
+<section id="search">
+  <div class="section-label reveal">Command</div>
+  <h2 class="section-title reveal reveal-delay-1"><span class="cmd">palace search</span> <span class="dim">&mdash; Semantic Search</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Find code by <strong>meaning</strong>, not just keywords. &ldquo;authentication&rdquo; finds
+    <code>login</code>, <code>validate_token</code>, <code>hash_password</code>.
+    Powered by ONNX embeddings &mdash; runs entirely offline.
+  </p>
+
+  <div class="terminal reveal reveal-delay-3" style="max-width: 780px; margin-top: 2.5rem;">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="terminal-title">palace search "user authentication login flow"</div>
+    </div>
+    <div class="terminal-body">
+<pre><span class="t-prompt">$</span> <span class="t-cmd">palace search</span> <span class="t-str">"user authentication login flow"</span>
+
+<span class="t-head">Search:</span> <span class="t-str">"user authentication login flow"</span>  <span class="t-dim">(6 results)</span>
+
+  <span class="t-dim">Score  Kind      Name                    File</span>
+  <span class="t-num">0.89</span>   <span class="t-green">class</span>     <span class="t-val">AuthenticationService</span>   <span class="t-dim">src/auth/service.py</span>
+  <span class="t-num">0.84</span>   <span class="t-green">method</span>    <span class="t-val">login</span>                   <span class="t-dim">src/auth/service.py</span>
+  <span class="t-num">0.81</span>   <span class="t-green">function</span>  <span class="t-val">validate_token</span>          <span class="t-dim">src/auth/jwt.py</span>
+  <span class="t-num">0.79</span>   <span class="t-green">class</span>     <span class="t-val">User</span>                    <span class="t-dim">src/core/models.py</span>
+  <span class="t-num">0.76</span>   <span class="t-green">method</span>    <span class="t-val">get_user</span>                <span class="t-dim">src/api/users.py</span>
+  <span class="t-num">0.71</span>   <span class="t-green">function</span>  <span class="t-val">hash_password</span>           <span class="t-dim">src/auth/crypto.py</span><span class="cursor"></span></pre>
+    </div>
+  </div>
+
+  <div class="section-caption reveal reveal-delay-4" style="margin-top: 2rem;">
+    <strong>768-dimensional vectors</strong> from UniXcoder ONNX model. Each symbol is embedded from its name + signature + docstring.
+    Query embedding is compared via cosine similarity in LanceDB. Filter by <code>--kind class</code> or <code>--format json</code>.
+  </div>
+</section>
+
+<!-- ─── DIFF ─── -->
+<section id="diff">
+  <div class="section-label reveal">Command</div>
+  <h2 class="section-title reveal reveal-delay-1"><span class="cmd">palace diff</span> <span class="dim">&mdash; Change Impact</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Understand the impact of any set of changes <strong>before you push</strong>.
+    Domains affected, blast radius, risk level, and which tests to run.
+  </p>
+
+  <div class="terminal reveal reveal-delay-3" style="max-width: 780px; margin-top: 2.5rem;">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="terminal-title">palace diff HEAD~3..HEAD</div>
+    </div>
+    <div class="terminal-body">
+<pre><span class="t-prompt">$</span> <span class="t-cmd">palace diff</span> <span class="t-str">HEAD~3..HEAD</span>
+
+<span class="t-head">Diff Impact:</span> <span class="t-val">HEAD~3..HEAD</span> <span class="t-dim">(4 files changed)</span>
+
+  <span class="t-dim">Changed Files:</span>
+    <span class="t-num">1.</span> <span class="t-val">src/auth/session.py</span>     <span class="t-red">[HIGH]</span>
+    <span class="t-num">2.</span> <span class="t-val">src/api/middleware.py</span>    <span class="t-amber">[MEDIUM]</span>
+    <span class="t-num">3.</span> <span class="t-val">src/config.py</span>           <span class="t-green">[LOW]</span>
+    <span class="t-num">4.</span> <span class="t-val">tests/test_auth.py</span>      <span class="t-green">[LOW]</span>
+
+  <span class="t-dim">Domains Affected:</span>
+    <span class="t-amber">Auth</span> <span class="t-red">[HIGH]</span>  <span class="t-dim">2 files modified</span>
+    <span class="t-amber">Api</span>  <span class="t-amber">[MEDIUM]</span>  <span class="t-dim">1 file modified</span>
+
+  <span class="t-dim">Blast Radius:</span>       <span class="t-num">23</span> <span class="t-dim">files transitively affected</span>
+  <span class="t-dim">Overall Risk:</span>       <span class="t-red">HIGH</span>
+
+  <span class="t-dim">Suggested Tests:</span>
+    <span class="t-val">tests/test_auth.py</span>
+    <span class="t-val">tests/test_middleware.py</span>
+    <span class="t-val">tests/integration/test_login.py</span><span class="cursor"></span></pre>
+    </div>
+  </div>
+
+  <div class="section-caption reveal reveal-delay-4" style="margin-top: 2rem;">
+    Parses <code>git diff --name-only</code>, maps changed files to the palace index, runs impact analysis per file,
+    and aggregates domain impact with the highest risk level. Works on any git range: <code>HEAD~1..HEAD</code>,
+    <code>main..feature</code>, or a commit SHA.
+  </div>
+</section>
+
+<!-- ─── EXPLORE ─── -->
+<section id="explore">
+  <div class="section-label reveal">The Star Feature</div>
+  <h2 class="section-title reveal reveal-delay-1"><span class="cmd">palace explore</span> <span class="dim">&mdash; Interactive TUI</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Full-screen terminal UI built with <strong>Textual</strong>. Navigate domains, drill into files,
+    inspect symbols. Press <code>/</code> to search from anywhere. <strong>This is the GIF that gets shared.</strong>
+  </p>
+
+  <div class="terminal tui-terminal reveal reveal-delay-3" style="max-width: 860px; margin-top: 2.5rem;">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="terminal-title">palace explore</div>
+    </div>
+    <div class="terminal-body" style="padding: 0;">
+      <div style="padding: 0.6rem 1.25rem; background: var(--bg-lift); border-bottom: 1px solid var(--border-dim); display: flex; justify-content: space-between;">
+        <span style="color: var(--green); font-weight: 700; letter-spacing: 0.08em;">CODE PALACE</span>
+        <span style="color: var(--txt-faint); font-size: 0.75rem;"><span style="color:var(--txt-dim);">q</span>:Quit  <span style="color:var(--txt-dim);">/</span>:Search  <span style="color:var(--txt-dim);">esc</span>:Back</span>
+      </div>
+      <div style="padding: 1.5rem;">
+<pre style="font-size: 0.78rem;"><span class="t-head">Domain Map</span> <span class="t-dim">(6 domains)</span>
+
+<span class="t-border">┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐</span>
+<span class="t-border">│</span> <span class="t-green">Auth</span>                <span class="t-border">│ │</span> <span class="t-cyan">Data Pipeline</span>       <span class="t-border">│ │</span> <span class="t-amber">API Layer</span>           <span class="t-border">│</span>
+<span class="t-border">│</span> <span class="t-num">23</span> <span class="t-dim">files</span>             <span class="t-border">│ │</span> <span class="t-num">31</span> <span class="t-dim">files</span>             <span class="t-border">│ │</span> <span class="t-num">18</span> <span class="t-dim">files</span>             <span class="t-border">│</span>
+<span class="t-border">│</span> <span class="t-dim">login, session,</span>     <span class="t-border">│ │</span> <span class="t-dim">ingest, transform,</span>  <span class="t-border">│ │</span> <span class="t-dim">routes, middleware,</span>  <span class="t-border">│</span>
+<span class="t-border">│</span> <span class="t-dim">permissions, token</span>  <span class="t-border">│ │</span> <span class="t-dim">loader, validate</span>    <span class="t-border">│ │</span> <span class="t-dim">handlers, schema</span>    <span class="t-border">│</span>
+<span class="t-border">└─────────────────────┘ └─────────────────────┘ └─────────────────────┘</span>
+<span class="t-border">┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐</span>
+<span class="t-border">│</span> <span class="t-purple">Core Models</span>         <span class="t-border">│ │</span> <span class="t-val">Configuration</span>       <span class="t-border">│ │</span> <span class="t-green">Testing</span>             <span class="t-border">│</span>
+<span class="t-border">│</span> <span class="t-num">12</span> <span class="t-dim">files</span>             <span class="t-border">│ │</span> <span class="t-num">8</span> <span class="t-dim">files</span>              <span class="t-border">│ │</span> <span class="t-num">45</span> <span class="t-dim">files</span>             <span class="t-border">│</span>
+<span class="t-border">└─────────────────────┘ └─────────────────────┘ └─────────────────────┘</span></pre>
+      </div>
+      <div style="padding: 0.5rem 1.25rem; background: var(--bg-lift); border-top: 1px solid var(--border-dim); display: flex; gap: 2rem;">
+        <span style="color: var(--txt-faint); font-size: 0.72rem;"><span style="color:var(--green);">ENTER</span> Select</span>
+        <span style="color: var(--txt-faint); font-size: 0.72rem;"><span style="color:var(--cyan);">/</span> Search</span>
+        <span style="color: var(--txt-faint); font-size: 0.72rem;"><span style="color:var(--amber);">ESC</span> Back</span>
+        <span style="color: var(--txt-faint); font-size: 0.72rem;"><span style="color:var(--red);">Q</span> Quit</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-caption reveal reveal-delay-4" style="margin-top: 2rem;">
+    <strong>3-level drill-down:</strong> Domains &rarr; Files &rarr; Symbols. Each level shows metadata, relationships, and context.
+    Press <code>/</code> from any screen to open the semantic search overlay. Built with <strong>Textual v8</strong> &mdash;
+    the same framework behind modern terminal UIs.
+  </div>
+</section>
+
+<!-- ─── INFRASTRUCTURE ─── -->
+<section id="infra">
+  <div class="section-label reveal">Under the Hood</div>
+  <h2 class="section-title reveal reveal-delay-1">What Powers Phase 2</h2>
+  <p class="section-body reveal reveal-delay-2">
+    Four new infrastructure layers &mdash; all embedded, all offline, all zero-config.
+  </p>
+
+  <div class="infra-grid reveal reveal-delay-3">
+    <div class="infra-card">
+      <div class="infra-icon">&#x25B6;</div>
+      <div class="infra-title">Git History</div>
+      <div class="infra-desc">
+        Subprocess <code>git log --numstat</code> parsing. Co-change analysis, ownership mapping,
+        churn hotspot detection. No GitPython &mdash; zero extra dependencies for git analysis.
+        Capped at <code>--git-depth 10000</code> commits by default.
+      </div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-icon">&#x25C6;</div>
+      <div class="infra-title">Embeddings</div>
+      <div class="infra-desc">
+        ONNX Runtime + UniXcoder tokenizer. <strong>768-dim vectors</strong> for every symbol.
+        Cached at <code>~/.cache/code-palace/</code>. One-time ~350MB download.
+        XDG-compliant paths. <code>--skip-embeddings</code> to bypass.
+      </div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-icon">&#x25CF;</div>
+      <div class="infra-title">Vector Store</div>
+      <div class="infra-desc">
+        <strong>LanceDB</strong> embedded. Zero-config, no server, stored in <code>.palace/vectors/</code>.
+        Two collections: symbol embeddings and file embeddings. Cosine similarity search
+        with optional kind and language filters.
+      </div>
+    </div>
+    <div class="infra-card">
+      <div class="infra-icon">&#x25A0;</div>
+      <div class="infra-title">Domain Clustering</div>
+      <div class="infra-desc">
+        NetworkX built-in <code>louvain_communities()</code>. Weighted graph:
+        import edges (3.0) + co-change (up to 2.0) + semantic similarity (up to 1.5).
+        Deterministic with <code>seed=42</code>. Auto-naming from directory prefixes.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── STATS ─── -->
+<section>
+  <div class="section-label reveal">By the Numbers</div>
+  <h2 class="section-title reveal reveal-delay-1">Phase 2 Stats</h2>
+
+  <div class="stats-grid reveal reveal-delay-2">
+    <div class="stats-cell">
+      <div class="stats-num">260</div>
+      <div class="stats-label">Tests Passing</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num purple">87</div>
+      <div class="stats-label">New in Phase 2</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num cyan">9</div>
+      <div class="stats-label">CLI Commands</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num amber">5</div>
+      <div class="stats-label">New DB Tables</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num">3</div>
+      <div class="stats-label">New Protocols</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num purple">~8k</div>
+      <div class="stats-label">Lines of Python</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num cyan">0</div>
+      <div class="stats-label">API Keys Required</div>
+    </div>
+    <div class="stats-cell">
+      <div class="stats-num amber">0</div>
+      <div class="stats-label">External Services</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── ARCHITECTURE ─── -->
+<section>
+  <div class="section-label reveal">Architecture</div>
+  <h2 class="section-title reveal reveal-delay-1">The Palace Graph <span class="dim">&mdash; Six Layers</span></h2>
+  <p class="section-body reveal reveal-delay-2">
+    Phase 2 activates layers 4 and 5. The structural foundation from Phase 1 now has
+    <strong>semantic understanding</strong> and <strong>temporal awareness</strong>.
+  </p>
+
+  <div class="layers-stack reveal reveal-delay-3">
+    <div class="layer-row">
+      <div class="layer-num-col">6</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color: var(--txt-faint);">BEHAVIORAL</div>
+        <div class="layer-detail">control flow, data flow, side effects, I/O boundaries</div>
+      </div>
+      <div class="layer-status pending">PHASE 3+</div>
+    </div>
+    <div class="layer-row">
+      <div class="layer-num-col" style="color: var(--green);">5</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color: var(--green);">TEMPORAL</div>
+        <div class="layer-detail">git history, co-change, ownership, churn hotspots</div>
+      </div>
+      <div class="layer-status done">&#10003; PHASE 2</div>
+    </div>
+    <div class="layer-row">
+      <div class="layer-num-col" style="color: var(--green);">4</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color: var(--green);">SEMANTIC</div>
+        <div class="layer-detail">embeddings, vector search, domain clustering</div>
+      </div>
+      <div class="layer-status done">&#10003; PHASE 2</div>
+    </div>
+    <div class="layer-row">
+      <div class="layer-num-col" style="color: var(--cyan);">3</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color: var(--cyan);">RELATIONAL</div>
+        <div class="layer-detail">imports, calls, dependency graph traversal</div>
+      </div>
+      <div class="layer-status done">&#10003; PHASE 1</div>
+    </div>
+    <div class="layer-row">
+      <div class="layer-num-col" style="color: var(--cyan);">2</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color: var(--cyan);">SYMBOLIC</div>
+        <div class="layer-detail">functions, classes, methods, interfaces, types</div>
+      </div>
+      <div class="layer-status done">&#10003; PHASE 1</div>
+    </div>
+    <div class="layer-row">
+      <div class="layer-num-col" style="color: var(--cyan);">1</div>
+      <div class="layer-content">
+        <div class="layer-name" style="color: var(--cyan);">STRUCTURAL</div>
+        <div class="layer-detail">files, directories, modules, packages</div>
+      </div>
+      <div class="layer-status done">&#10003; PHASE 1</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── ROADMAP ─── -->
+<section>
+  <div class="section-label reveal">What's Next</div>
+  <h2 class="section-title reveal reveal-delay-1">Phase 3 <span class="dim">&mdash; Intelligence</span></h2>
+
+  <div class="roadmap-box reveal reveal-delay-2">
+    <div class="roadmap-title">Coming in Phase 3</div>
+    <ul class="roadmap-items">
+      <li><strong>palace plan</strong> with LLM &mdash; full change plans with AI-generated rationale (Claude / OpenAI / Ollama)</li>
+      <li><strong>palace explain</strong> &mdash; natural language codebase explanations, not just symbol listings</li>
+      <li><strong>palace onboard</strong> &mdash; auto-generated codebase tour for new developers</li>
+      <li><strong>palace serve</strong> &mdash; MCP server mode, use Palace as a tool in Claude Code, Cursor, Windsurf</li>
+      <li><strong>Graceful degradation</strong> &mdash; every LLM feature works without an API key via local models (Ollama)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ─── FOOTER ─── -->
+<footer>
+  <p>
+    Code Palace v0.2.0 &mdash; Phase 2: The Star Magnet<br>
+    Built by <a href="https://github.com/sandip-patel-1604">sandip-patel-1604</a> &ensp;|&ensp;
+    <a href="https://github.com/sandip-patel-1604/code-palace">GitHub</a> &ensp;|&ensp;
+    <a href="https://pypi.org/project/code-palace/">PyPI</a>
+  </p>
+</footer>
+
+<!-- ─── SCROLL REVEAL JS ─── -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

@@ -13,6 +13,7 @@ from rich.tree import Tree
 
 from palace.core.config import PalaceConfig
 from palace.core.palace import Palace
+from palace.graph.builder import BuildStats
 
 console = Console()
 
@@ -44,6 +45,26 @@ def init_command(
         False,
         "--no-progress",
         help="Disable progress bars.",
+    ),
+    skip_git: bool = typer.Option(
+        False,
+        "--skip-git",
+        help="Skip git history analysis.",
+    ),
+    skip_embeddings: bool = typer.Option(
+        False,
+        "--skip-embeddings",
+        help="Skip embedding computation.",
+    ),
+    skip_domains: bool = typer.Option(
+        False,
+        "--skip-domains",
+        help="Skip domain clustering.",
+    ),
+    git_depth: int = typer.Option(
+        10000,
+        "--git-depth",
+        help="Max git commits to analyze.",
     ),
 ) -> None:
     """Parse and index a codebase into a Palace graph."""
@@ -88,7 +109,15 @@ def init_command(
     palace = Palace(config)
 
     # Run with optional progress bar
-    stats = _run_init(palace, force=force, no_progress=no_progress)
+    stats = _run_init(
+        palace,
+        force=force,
+        no_progress=no_progress,
+        skip_git=skip_git,
+        skip_embeddings=skip_embeddings,
+        skip_domains=skip_domains,
+        git_depth=git_depth,
+    )
 
     # Detect language counts for the summary panel
     lang_counts = config.detect_languages()
@@ -104,12 +133,22 @@ def _run_init(
     palace: Palace,
     force: bool,
     no_progress: bool,
+    skip_git: bool = False,
+    skip_embeddings: bool = False,
+    skip_domains: bool = False,
+    git_depth: int = 10_000,
 ) -> object:
     """Run palace.init() with an optional Rich progress bar."""
-    from palace.graph.builder import BuildStats
+    from palace.graph.builder import BuildStats  # noqa: F401 (kept for type clarity)
 
     if no_progress:
-        return palace.init(force=force)
+        return palace.init(
+            force=force,
+            skip_git=skip_git,
+            skip_embeddings=skip_embeddings,
+            skip_domains=skip_domains,
+            git_depth=git_depth,
+        )
 
     with Progress(
         TextColumn("[bold blue]{task.description}"),
@@ -123,7 +162,14 @@ def _run_init(
         def _callback(done: int, total: int) -> None:
             progress.update(task, completed=done, total=total)
 
-        stats = palace.init(force=force, progress_callback=_callback)
+        stats = palace.init(
+            force=force,
+            skip_git=skip_git,
+            skip_embeddings=skip_embeddings,
+            skip_domains=skip_domains,
+            git_depth=git_depth,
+            progress_callback=_callback,
+        )
 
     return stats
 
@@ -152,6 +198,14 @@ def _print_summary(
         f"([green]{stats.imports_resolved} resolved[/green])"
     )
     tree.add(f"Duration:  [cyan]{stats.duration_seconds:.1f}s[/cyan]")
+
+    # Phase 2 stats — only shown when the phase actually ran
+    if stats.commits is not None:
+        tree.add(f"Commits:   [cyan]{stats.commits:,}[/cyan]")
+    if stats.embeddings is not None:
+        tree.add(f"Embeddings:[cyan]{stats.embeddings:,}[/cyan]")
+    if stats.domains is not None:
+        tree.add(f"Domains:   [cyan]{stats.domains:,}[/cyan]")
 
     panel_content = (
         f"  Root:       {root}\n"

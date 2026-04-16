@@ -161,3 +161,169 @@ class Store(Protocol):
     def close(self) -> None:
         """Close the underlying database connection."""
         ...
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 protocols — additive, do not modify Store above
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class TemporalStore(Protocol):
+    """Protocol for git history storage operations."""
+
+    def upsert_commit(
+        self,
+        sha: str,
+        author_name: str,
+        author_email: str,
+        committed_at: str,
+        message: str,
+        insertions: int,
+        deletions: int,
+    ) -> int:
+        """Insert a git commit row. Returns the commit_id."""
+        ...
+
+    def upsert_file_change(
+        self,
+        commit_id: int,
+        file_path: str,
+        file_id: int | None,
+        insertions: int | None,
+        deletions: int | None,
+        change_type: str,
+    ) -> None:
+        """Insert a per-file change within a commit."""
+        ...
+
+    def materialize_cochange(self, min_co_commits: int = 3) -> int:
+        """Compute cochange_pairs from git_file_changes. Returns pair count."""
+        ...
+
+    def get_cochange_pairs(self, file_id: int, min_co_commits: int = 3) -> list[dict]:
+        """Return files that frequently change alongside file_id."""
+        ...
+
+    def get_file_ownership(self, file_id: int) -> list[dict]:
+        """Return author contribution breakdown for a file."""
+        ...
+
+    def get_churn(self, file_id: int | None = None, days: int = 90) -> list[dict]:
+        """Return change-frequency metrics, optionally filtered to one file."""
+        ...
+
+    def get_commit_count(self) -> int:
+        """Return total number of stored commits."""
+        ...
+
+
+@runtime_checkable
+class DomainStore(Protocol):
+    """Protocol for domain clustering storage."""
+
+    def upsert_domain(
+        self,
+        name: str,
+        description: str | None = None,
+        color: str | None = None,
+    ) -> int:
+        """Insert a domain cluster. Returns the domain_id."""
+        ...
+
+    def assign_file_to_domain(
+        self,
+        file_id: int,
+        domain_id: int,
+        confidence: float = 1.0,
+    ) -> None:
+        """Map a file to a domain cluster."""
+        ...
+
+    def get_domains(self) -> list[dict]:
+        """Return all domain clusters."""
+        ...
+
+    def get_domain_files(self, domain_id: int) -> list[dict]:
+        """Return files assigned to a domain."""
+        ...
+
+    def get_file_domain(self, file_id: int) -> dict | None:
+        """Return the domain assignment for a file, or None."""
+        ...
+
+
+@runtime_checkable
+class VectorStore(Protocol):
+    """Protocol for 768-dim vector embedding storage and similarity search.
+
+    Backed by LanceDB.  Keeps symbol embeddings and file embeddings in
+    separate tables so searches can be scoped without cross-table noise.
+    """
+
+    def upsert_symbol_embedding(
+        self,
+        symbol_id: int,
+        file_id: int,
+        name: str,
+        qualified_name: str,
+        kind: str,
+        file_path: str,
+        text: str,
+        vector: list[float],
+    ) -> None:
+        """Store or overwrite the embedding for a symbol.
+
+        If a row with the same symbol_id already exists it is replaced.
+        """
+        ...
+
+    def upsert_file_embedding(
+        self,
+        file_id: int,
+        path: str,
+        language: str,
+        text: str,
+        vector: list[float],
+    ) -> None:
+        """Store or overwrite the embedding for a file.
+
+        If a row with the same file_id already exists it is replaced.
+        """
+        ...
+
+    def search_symbols(
+        self,
+        query_vector: list[float],
+        limit: int = 20,
+        kind: str | None = None,
+    ) -> list[dict]:
+        """Vector similarity search over symbol embeddings.
+
+        Returns a list of dicts with keys:
+            symbol_id, file_id, name, qualified_name, kind, file_path, score
+        where score is 1 - _distance (higher = more similar).
+        """
+        ...
+
+    def search_files(
+        self,
+        query_vector: list[float],
+        limit: int = 20,
+        language: str | None = None,
+    ) -> list[dict]:
+        """Vector similarity search over file embeddings.
+
+        Returns a list of dicts with keys:
+            file_id, path, language, score
+        where score is 1 - _distance (higher = more similar).
+        """
+        ...
+
+    def clear(self) -> None:
+        """Drop both embedding tables, resetting the store to empty."""
+        ...
+
+    def close(self) -> None:
+        """Close the underlying LanceDB connection."""
+        ...

@@ -44,3 +44,19 @@ app.command(name="init", help="Parse and index a codebase.")(init_command)
 app.command(name="symbols", help="List and search symbols.")(symbols_command)
 app.command(name="deps", help="Query file and symbol dependencies.")(deps_command)
 app.command(name="plan", help="Generate a structural change plan.")(plan_command)
+
+from palace.cli.commands.domains import domains_command  # noqa: E402
+from palace.cli.commands.impact import impact_command  # noqa: E402
+from palace.cli.commands.search import search_command  # noqa: E402
+
+app.command(name="domains", help="Show auto-discovered domain clusters.")(domains_command)
+app.command(name="impact", help="Analyze blast radius of a file or symbol.")(impact_command)
+app.command(name="search", help="Semantic code search.")(search_command)
+
+from palace.cli.commands.explore import explore_command  # noqa: E402
+
+app.command(name="explore", help="Launch the interactive TUI explorer.")(explore_command)
+
+from palace.cli.commands.diff import diff_command  # noqa: E402
+
+app.command(name="diff", help="Impact analysis on a git diff range.")(diff_command)

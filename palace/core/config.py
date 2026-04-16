@@ -43,6 +43,11 @@ class PalaceConfig:
     languages: list[str] = field(default_factory=list)
     exclude_patterns: list[str] = field(default_factory=list)
 
+    @property
+    def vectors_dir(self) -> Path:
+        """Path to the LanceDB vectors directory — derived, never serialized."""
+        return self.palace_dir / "vectors"
+
     @classmethod
     def discover(cls, path: Path | None = None) -> PalaceConfig | None:
         """Walk up from `path` to find an existing .palace/ directory.
