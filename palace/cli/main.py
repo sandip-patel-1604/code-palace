@@ -60,3 +60,15 @@ app.command(name="explore", help="Launch the interactive TUI explorer.")(explore
 from palace.cli.commands.diff import diff_command  # noqa: E402
 
 app.command(name="diff", help="Impact analysis on a git diff range.")(diff_command)
+
+from palace.cli.commands.explain import explain_command  # noqa: E402
+from palace.cli.commands.onboard import onboard_command  # noqa: E402
+from palace.cli.commands.serve import serve_command  # noqa: E402
+
+app.command(name="explain", help="Natural-language explanation of a file or directory.")(
+    explain_command
+)
+app.command(name="onboard", help="Generate an onboarding tour of the codebase.")(
+    onboard_command
+)
+app.command(name="serve", help="Run the palace MCP stdio server.")(serve_command)
