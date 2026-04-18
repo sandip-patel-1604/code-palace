@@ -194,52 +194,18 @@ class StructuralPlanner:
         matched_files: list[MatchedFile],
     ) -> list[DetectedPattern]:
         """Detect naming conventions in directories that contain matched files."""
-        # Group all indexed files by their directory
-        dir_to_paths: dict[str, list[str]] = {}
-        for f in all_files:
-            p = Path(f["path"])
-            dir_str = str(p.parent)
-            dir_to_paths.setdefault(dir_str, []).append(f["path"])
-
-        # Directories that contain at least one matched file
-        matched_dirs: set[str] = {str(Path(mf.path).parent) for mf in matched_files}
-
-        detected: list[DetectedPattern] = []
-        seen_patterns: set[str] = set()
-
-        for directory in matched_dirs:
-            siblings = dir_to_paths.get(directory, [])
-            if len(siblings) < 2:
-                continue
-
-            # Collect base-names (without extension) to look for shared suffixes/prefixes
-            basenames = [Path(p).stem for p in siblings]
-
-            # Try common suffix patterns like *_handler, *_service, *_command, etc.
-            for pattern_suffix in _find_common_suffixes(basenames):
-                pattern_key = f"{directory}::{pattern_suffix}"
-                if pattern_key in seen_patterns:
-                    continue
-                examples = [
-                    Path(p).name
-                    for p in siblings
-                    if Path(p).stem.endswith(pattern_suffix)
-                ]
-                if len(examples) >= 2:
-                    seen_patterns.add(pattern_key)
-                    detected.append(
-                        DetectedPattern(
-                            name=f"{pattern_suffix.lstrip('_').replace('_', ' ').title()} pattern",
-                            directory=directory,
-                            examples=examples,
-                            description=(
-                                f"Files in {directory!r} follow the"
-                                f" *{pattern_suffix}.py naming convention."
-                            ),
-                        )
-                    )
-
-        return detected
+        from palace.graph.patterns import PatternDetector  # noqa: PLC0415
+        detector = PatternDetector(self.store)
+        conventions = detector.detect_naming_conventions(all_files, matched_files)
+        return [
+            DetectedPattern(
+                name=c.name,
+                directory=c.directory,
+                examples=c.examples,
+                description=c.description,
+            )
+            for c in conventions
+        ]
 
 
 # ---------------------------------------------------------------------------
