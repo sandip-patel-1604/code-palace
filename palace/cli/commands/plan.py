@@ -14,6 +14,8 @@ from rich.text import Text
 from palace.core.config import PalaceConfig
 from palace.core.palace import Palace
 from palace.graph.planner import PlanResult, StructuralPlanner
+from palace.llm.availability import check_availability, render_degraded_notice
+from palace.llm.planner import EnrichedPlanResult, LLMPlanner
 
 console = Console()
 
@@ -34,6 +36,16 @@ def plan_command(
         "--format",
         help="Output format: rich, json, markdown.",
     ),
+    no_llm: bool = typer.Option(
+        False,
+        "--no-llm",
+        help="Skip LLM enrichment even when a provider is available.",
+    ),
+    provider: Optional[str] = typer.Option(  # noqa: UP007
+        None,
+        "--provider",
+        help="Force a specific LLM provider: claude, openai, or ollama.",
+    ),
 ) -> None:
     """Generate a structural change plan from a task description."""
     # Discover palace config — walk up from cwd
@@ -50,9 +62,19 @@ def plan_command(
 
     try:
         assert palace.store is not None
-        result = StructuralPlanner(palace.store).plan(task, scope=scope)
+        structural = StructuralPlanner(palace.store).plan(task, scope=scope)
     finally:
         palace.close()
+
+    # --- Optional LLM enrichment ---
+    result: PlanResult | EnrichedPlanResult = structural
+    degraded = False
+    if not no_llm:
+        availability = check_availability(prefer=provider)
+        if availability.is_available and availability.provider is not None:
+            result = LLMPlanner(availability.provider).enrich(structural)
+        else:
+            degraded = True
 
     # --- Output routing ---
     if format == "json":
@@ -61,6 +83,8 @@ def plan_command(
         _output_markdown(result)
     else:
         _output_rich(result)
+        if degraded:
+            render_degraded_notice(console, "palace plan")
 
 
 # ---------------------------------------------------------------------------
@@ -68,16 +92,27 @@ def plan_command(
 # ---------------------------------------------------------------------------
 
 
-def _output_rich(result: PlanResult) -> None:
+def _output_rich(result: PlanResult | EnrichedPlanResult) -> None:
     """Render the plan with Rich markup."""
     console.print()
+    title = "Change Plan" if isinstance(result, EnrichedPlanResult) else "Structural Change Plan"
     console.print(
         Panel(
-            f'[bold cyan]Structural Change Plan:[/bold cyan] [white]"{result.task}"[/white]',
+            f'[bold cyan]{title}:[/bold cyan] [white]"{result.task}"[/white]',
             expand=False,
             border_style="cyan",
         )
     )
+
+    # LLM enrichment — rationale + risk
+    if isinstance(result, EnrichedPlanResult) and result.rationale:
+        console.print(
+            f"\n  [bold]Risk:[/bold] {result.risk}   "
+            f"[dim]via {result.llm_provider}[/dim]"
+        )
+        console.print()
+        console.print(result.rationale)
+        console.print()
 
     # Keywords
     if result.keywords:
@@ -128,7 +163,7 @@ def _output_rich(result: PlanResult) -> None:
     )
 
 
-def _output_json(result: PlanResult) -> None:
+def _output_json(result: PlanResult | EnrichedPlanResult) -> None:
     """Serialise PlanResult to JSON and print to stdout."""
     data = {
         "task": result.task,
@@ -162,14 +197,26 @@ def _output_json(result: PlanResult) -> None:
         ],
         "suggested_tests": result.suggested_tests,
     }
+    if isinstance(result, EnrichedPlanResult):
+        data["rationale"] = result.rationale
+        data["risk"] = result.risk
+        data["llm_provider"] = result.llm_provider
     typer.echo(json.dumps(data, indent=2))
 
 
-def _output_markdown(result: PlanResult) -> None:
+def _output_markdown(result: PlanResult | EnrichedPlanResult) -> None:
     """Render the plan as Markdown."""
     lines: list[str] = []
-    lines.append(f'# Structural Change Plan: "{result.task}"')
+    title = "Change Plan" if isinstance(result, EnrichedPlanResult) else "Structural Change Plan"
+    lines.append(f'# {title}: "{result.task}"')
     lines.append("")
+
+    if isinstance(result, EnrichedPlanResult) and result.rationale:
+        lines.append(f"**Risk:** {result.risk}")
+        lines.append(f"**Provider:** {result.llm_provider}")
+        lines.append("")
+        lines.append(result.rationale)
+        lines.append("")
 
     if result.keywords:
         lines.append(f"**Keywords:** {', '.join(result.keywords)}")
