@@ -1,6 +1,9 @@
 # Palace data (generated per-repo)
 .palace/
 
+# Claude Code agent worktrees (transient)
+.claude/worktrees/
+
 # Python
 __pycache__/
 *.py[cod]
