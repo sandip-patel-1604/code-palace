@@ -207,10 +207,22 @@ def _print_summary(
     if stats.domains is not None:
         tree.add(f"Domains:   [cyan]{stats.domains:,}[/cyan]")
 
+    # Surface parse errors — show first 10 with remaining count
+    warning_lines = ""
+    if stats.errors:
+        shown = stats.errors[:10]
+        warning_lines = "\n  [yellow]Warnings:[/yellow]\n"
+        for err in shown:
+            warning_lines += f"    [dim]• {err}[/dim]\n"
+        remaining = len(stats.errors) - len(shown)
+        if remaining > 0:
+            warning_lines += f"    [dim]… and {remaining} more[/dim]\n"
+
     panel_content = (
         f"  Root:       {root}\n"
         f"  Languages:  {lang_str}\n\n"
         f"{_render_tree(tree)}\n"
+        f"{warning_lines}"
         f"  Palace ready [green]→[/green] .palace/"
     )
 

@@ -87,3 +87,71 @@ class TestDomainClusterer:
         clusterer = DomainClusterer(store)
         domains = clusterer.cluster()
         assert domains == []
+
+
+# ---------------------------------------------------------------------------
+# T_14.5 — Clustering N+1 fix and encapsulation
+# ---------------------------------------------------------------------------
+
+
+class TestBulkCochangeAndClearDomains:
+    """T_14.5: Bulk cochange query and clear_domains encapsulation."""
+
+    def test_get_all_cochange_pairs_structure(self, store: DuckDBStore) -> None:
+        """T_14.5.1: get_all_cochange_pairs returns dicts with correct keys."""
+        # Set up: two files co-changing in 3 commits
+        fid_a = store.upsert_file(FileRecord("a.py", "python", 50, 5, "ha"))
+        fid_b = store.upsert_file(FileRecord("b.py", "python", 50, 5, "hb"))
+        for i in range(3):
+            cid = store.upsert_commit(f"sha{i}", "dev", "dev@x.com", "2024-01-01", f"msg{i}", 1, 0)
+            store.upsert_file_change(cid, "a.py", fid_a, 1, 0, "M")
+            store.upsert_file_change(cid, "b.py", fid_b, 1, 0, "M")
+        store.materialize_cochange(min_co_commits=3)
+
+        pairs = store.get_all_cochange_pairs(min_co_commits=3)
+        assert len(pairs) >= 1
+        pair = pairs[0]
+        assert "file_id_a" in pair
+        assert "file_id_b" in pair
+        assert "co_commits" in pair
+        assert "confidence" in pair
+
+    def test_get_all_cochange_pairs_filter(self, store: DuckDBStore) -> None:
+        """T_14.5.2: min_co_commits filter is applied correctly."""
+        fid_a = store.upsert_file(FileRecord("x.py", "python", 50, 5, "hx"))
+        fid_b = store.upsert_file(FileRecord("y.py", "python", 50, 5, "hy"))
+        for i in range(3):
+            cid = store.upsert_commit(f"s{i}", "dev", "d@x.com", "2024-01-01", f"m{i}", 1, 0)
+            store.upsert_file_change(cid, "x.py", fid_a, 1, 0, "M")
+            store.upsert_file_change(cid, "y.py", fid_b, 1, 0, "M")
+        store.materialize_cochange(min_co_commits=2)
+
+        # Should find pairs with co_commits >= 5 = none (only 3 co-commits)
+        pairs_high = store.get_all_cochange_pairs(min_co_commits=5)
+        assert len(pairs_high) == 0
+
+        # Should find pairs with co_commits >= 3
+        pairs_low = store.get_all_cochange_pairs(min_co_commits=3)
+        assert len(pairs_low) >= 1
+        for p in pairs_low:
+            assert p["co_commits"] >= 3
+
+    def test_clear_domains(self, store: DuckDBStore) -> None:
+        """T_14.5.3: clear_domains removes all domain and file_domain rows."""
+        fid = store.upsert_file(FileRecord("c.py", "python", 50, 5, "hc"))
+        did = store.upsert_domain("TestDomain")
+        store.assign_file_to_domain(fid, did)
+
+        assert len(store.get_domains()) == 1
+        store.clear_domains()
+        assert len(store.get_domains()) == 0
+
+    def test_clustering_equivalence(self, store: DuckDBStore) -> None:
+        """T_14.5.4: Clustering with bulk query produces valid domains."""
+        _make_two_clusters(store)
+        clusterer = DomainClusterer(store)
+        domains = clusterer.cluster(min_files=2)
+        # Should produce at least 2 domains (the two clusters)
+        assert len(domains) >= 2
+        total_files = sum(d["file_count"] for d in domains)
+        assert total_files > 0

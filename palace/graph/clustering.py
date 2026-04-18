@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
+from palace.core.logging import get_logger
 from palace.core.models import EdgeType
 
 if TYPE_CHECKING:
     from palace.storage.duckdb_store import DuckDBStore
+
+logger = get_logger(__name__)
 
 
 class DomainClusterer:
@@ -51,8 +54,7 @@ class DomainClusterer:
             return self._single_domain(all_files)
 
         # Clear old domain assignments
-        self._store._con.execute("DELETE FROM file_domains")
-        self._store._con.execute("DELETE FROM domains")
+        self._store.clear_domains()
 
         # Build file_id → path lookup
         path_map = {f["file_id"]: f["path"] for f in all_files}
@@ -94,28 +96,27 @@ class DomainClusterer:
             else:
                 graph.add_edge(src, tgt, weight=3.0)
 
-        # Co-change edges (weight = min(co_commits/5, 2.0))
-        for fid in file_ids:
-            try:
-                partners = self._store.get_cochange_pairs(fid, min_co_commits=2)
-            except Exception:
+        # Co-change edges (weight = min(co_commits/5, 2.0)) — single bulk query
+        try:
+            all_pairs = self._store.get_all_cochange_pairs(min_co_commits=2)
+        except Exception:
+            logger.debug("No cochange data available")
+            all_pairs = []
+        for pair in all_pairs:
+            a, b = pair["file_id_a"], pair["file_id_b"]
+            if a not in file_ids or b not in file_ids:
                 continue
-            for p in partners:
-                pid = p["partner_id"]
-                if pid not in file_ids:
-                    continue
-                w = min(p["co_commits"] / 5.0, 2.0)
-                if graph.has_edge(fid, pid):
-                    graph[fid][pid]["weight"] += w
-                else:
-                    graph.add_edge(fid, pid, weight=w)
+            w = min(pair["co_commits"] / 5.0, 2.0)
+            if graph.has_edge(a, b):
+                graph[a][b]["weight"] += w
+            else:
+                graph.add_edge(a, b, weight=w)
 
         return graph
 
     def _single_domain(self, all_files: list[dict]) -> list[dict]:
         """Fallback: assign all files to one domain."""
-        self._store._con.execute("DELETE FROM file_domains")
-        self._store._con.execute("DELETE FROM domains")
+        self._store.clear_domains()
         if not all_files:
             return []
         domain_id = self._store.upsert_domain("All Files")

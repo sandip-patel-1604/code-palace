@@ -205,6 +205,17 @@ class DuckDBStore:
         assert row is not None
         return int(row[0])
 
+    def get_file_by_id(self, file_id: int) -> dict | None:
+        """Return the file row for file_id, or None if not found."""
+        cols = self._file_columns()
+        row = self._con.execute(
+            f"SELECT {', '.join(cols)} FROM files WHERE file_id = ?",
+            [file_id],
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_dict(row, cols)
+
     def get_file_by_path(self, path: str) -> dict | None:
         """Return the file row for path, or None if not found."""
         row = self._con.execute(
@@ -260,6 +271,16 @@ class DuckDBStore:
         ).fetchone()
         assert row is not None
         return int(row[0])
+
+    def upsert_symbols_batch(self, records: list[SymbolRecord]) -> list[int]:
+        """Insert multiple symbol rows.  Returns symbol_ids.
+
+        Uses individual INSERTs with RETURNING (DuckDB auto-commits each).
+        Reduces Python-side overhead vs calling upsert_symbol in a loop.
+        """
+        if not records:
+            return []
+        return [self.upsert_symbol(r) for r in records]
 
     def get_symbols(
         self,
@@ -317,6 +338,34 @@ class DuckDBStore:
                 record.weight,
                 metadata_json,
             ],
+        )
+
+    def upsert_edges_batch(self, records: list[EdgeRecord]) -> None:
+        """Insert multiple edge rows in a single transaction."""
+        if not records:
+            return
+        params = []
+        for record in records:
+            metadata_json = json.dumps(record.metadata) if record.metadata is not None else None
+            params.append((
+                record.source_file_id,
+                record.target_file_id,
+                record.source_symbol_id,
+                record.target_symbol_id,
+                record.edge_type,
+                record.weight,
+                metadata_json,
+            ))
+        self._con.executemany(
+            """
+            INSERT INTO edges(
+                source_file_id, target_file_id,
+                source_symbol_id, target_symbol_id,
+                edge_type, weight, metadata
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            params,
         )
 
     def get_edges(
@@ -485,6 +534,12 @@ class DuckDBStore:
         ).fetchone()
         assert row is not None
         return int(row[0])
+
+    def upsert_imports_batch(self, records: list[ImportRecord]) -> list[int]:
+        """Insert multiple import rows.  Returns import_ids."""
+        if not records:
+            return []
+        return [self.upsert_import(r) for r in records]
 
     def resolve_import(self, import_id: int, resolved_file_id: int) -> None:
         """Set resolved_file_id on an import row once the target is known."""
@@ -698,6 +753,27 @@ class DuckDBStore:
             for r in rows
         ]
 
+    def get_all_cochange_pairs(self, min_co_commits: int = 3) -> list[dict]:
+        """Return all cochange pairs above the threshold in one query."""
+        rows = self._con.execute(
+            """
+            SELECT file_id_a, file_id_b, co_commits, confidence
+            FROM cochange_pairs
+            WHERE co_commits >= ?
+            ORDER BY co_commits DESC
+            """,
+            [min_co_commits],
+        ).fetchall()
+        return [
+            {
+                "file_id_a": int(r[0]),
+                "file_id_b": int(r[1]),
+                "co_commits": int(r[2]),
+                "confidence": float(r[3]),
+            }
+            for r in rows
+        ]
+
     def get_file_ownership(self, file_id: int) -> list[dict]:
         """Return author contribution breakdown for a file."""
         rows = self._con.execute(
@@ -855,6 +931,11 @@ class DuckDBStore:
             "color": row[3],
             "confidence": float(row[4]),
         }
+
+    def clear_domains(self) -> None:
+        """Delete all domain assignments and domains."""
+        self._con.execute("DELETE FROM file_domains")
+        self._con.execute("DELETE FROM domains")
 
     # ------------------------------------------------------------------
     # Lifecycle

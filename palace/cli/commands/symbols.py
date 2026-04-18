@@ -170,11 +170,11 @@ def _get_matched_files(palace: Palace, file_pattern: str) -> list[dict]:
 
 
 def _file_path_for_id(palace: Palace, file_id: int) -> str:
-    """Return the path string for a given file_id."""
+    """Return the path string for a given file_id via O(1) index lookup."""
     assert palace.store is not None
-    for f in palace.store.get_all_files():
-        if f["file_id"] == file_id:
-            return f["path"]
+    row = palace.store.get_file_by_id(file_id)
+    if row is not None:
+        return row["path"]
     return str(file_id)
 
 

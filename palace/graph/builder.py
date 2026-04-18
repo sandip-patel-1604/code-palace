@@ -103,7 +103,9 @@ class GraphBuilder:
             file_id_map[path_str] = file_id
             stats.files += 1
 
-        # Insert symbols in a second pass so file_id_map is fully populated
+        # Insert symbols in a second pass so file_id_map is fully populated.
+        # Sequential per-symbol insert preserves parent_id FK ordering
+        # (parent symbols appear before children in tree-sitter output).
         for extraction in extractions:
             file_id = file_id_map[str(extraction.path)]
             # Map parent_name -> symbol_id within this file
@@ -194,19 +196,20 @@ class GraphBuilder:
     ) -> None:
         """Create deduplicated IMPORTS edges for each resolved import pair."""
         seen: set[tuple[int, int]] = set()
+        records: list[EdgeRecord] = []
         for source_id, target_id in import_edges:
             key = (source_id, target_id)
             if key in seen:
                 continue
             seen.add(key)
-            self.store.upsert_edge(
-                EdgeRecord(
-                    source_file_id=source_id,
-                    edge_type=str(EdgeType.IMPORTS),
-                    target_file_id=target_id,
-                )
-            )
-            stats.edges += 1
+            records.append(EdgeRecord(
+                source_file_id=source_id,
+                edge_type=str(EdgeType.IMPORTS),
+                target_file_id=target_id,
+            ))
+
+        self.store.upsert_edges_batch(records)
+        stats.edges += len(records)
 
     # ------------------------------------------------------------------
     # Import resolution

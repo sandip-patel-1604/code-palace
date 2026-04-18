@@ -9,9 +9,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from palace.core.logging import get_logger
+
 if TYPE_CHECKING:
     import onnxruntime
     import tokenizers
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -91,6 +95,12 @@ class EmbeddingEngine:
         """
         assert self._tokenizer is not None  # guaranteed by _ensure_loaded()
         encoding = self._tokenizer.encode(text)
+        if len(encoding.ids) > _MAX_TOKENS:
+            logger.debug(
+                "Input truncated from %d to %d tokens",
+                len(encoding.ids),
+                _MAX_TOKENS,
+            )
         input_ids: list[int] = encoding.ids[:_MAX_TOKENS]
         attention_mask: list[int] = [1] * len(input_ids)
         return input_ids, attention_mask

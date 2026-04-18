@@ -8,9 +8,12 @@ from pathlib import Path
 from typing import Callable
 
 from palace.core.config import PalaceConfig
+from palace.core.logging import get_logger
 from palace.graph.builder import BuildStats, GraphBuilder
 from palace.parsing.engine import ParsingEngine
 from palace.storage.duckdb_store import DuckDBStore
+
+logger = get_logger(__name__)
 
 
 class Palace:
@@ -114,6 +117,7 @@ class Palace:
                 stats.commits = count
                 git_analyzed = True
             except Exception as exc:  # noqa: BLE001
+                logger.warning("Git history ingestion failed: %s", exc)
                 stats.errors.append(f"git: {exc}")
 
         # --- Phase 3: Embeddings ---
@@ -143,7 +147,7 @@ class Palace:
                         name=sym["name"],
                         qualified_name=sym["qualified_name"],
                         kind=sym["kind"],
-                        file_path=_path_for_file(sym["file_id"], self.store),
+                        file_path=_file_path_by_id(sym["file_id"], self.store),
                         text=text,
                         vector=vector,
                     )
@@ -151,6 +155,7 @@ class Palace:
                 stats.embeddings = count
                 embeddings_computed = True
             except Exception as exc:  # noqa: BLE001
+                logger.warning("Embedding computation failed: %s", exc)
                 stats.errors.append(f"embeddings: {exc}")
 
         # --- Phase 4: Domain clustering (stub — full impl in Phase 2.2) ---
@@ -160,6 +165,7 @@ class Palace:
                 stats.domains = 0
                 domains_computed = True
             except Exception as exc:  # noqa: BLE001
+                logger.warning("Domain clustering failed: %s", exc)
                 stats.errors.append(f"domains: {exc}")
 
         # Persist phase completion flags to palace_meta
@@ -179,15 +185,9 @@ def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
-def _path_for_file(file_id: int, store: DuckDBStore) -> str:
-    """Return the file path string for a given file_id, or empty string if not found.
-
-    Why: upsert_symbol_embedding needs a human-readable path, but symbols only
-    carry file_id.  A full join would be expensive; a per-symbol lookup keeps
-    this simple until Phase 2.2 introduces batched embedding with a JOIN query.
-    """
-    files = store.get_all_files()
-    for f in files:
-        if f["file_id"] == file_id:
-            return f.get("path", "")
-    return ""
+def _file_path_by_id(file_id: int, store: DuckDBStore) -> str:
+    """Return the file path string for a given file_id via O(1) index lookup."""
+    row = store.get_file_by_id(file_id)
+    if row is None:
+        return ""
+    return row.get("path", "")

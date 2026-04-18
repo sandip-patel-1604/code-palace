@@ -73,7 +73,7 @@ def get_dependency_tree(
     visited: set[int] = set()
 
     def _build(fid: int, depth: int) -> dict:
-        file_row = store.get_file_by_path(_path_for(store, fid))
+        file_row = store.get_file_by_id(fid)
         node: dict = {
             "file_id": fid,
             "path": file_row["path"] if file_row else "",
@@ -94,13 +94,3 @@ def get_dependency_tree(
     return _build(file_id, 0)
 
 
-def _path_for(store: DuckDBStore, file_id: int) -> str:
-    """Return the path string for a file_id by scanning all files.
-
-    Linear scan is acceptable because get_dependency_tree is a query operation,
-    not a hot path called millions of times.
-    """
-    for row in store.get_all_files():
-        if row["file_id"] == file_id:
-            return row["path"]
-    return ""

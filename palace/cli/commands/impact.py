@@ -80,26 +80,11 @@ def impact_command(
 
 
 def _resolve_target(palace: Palace, target: str) -> dict | None:
-    """Find the file record matching target path."""
+    """Find the file record matching target path via shared resolver."""
     assert palace.store is not None
-    root = palace.config.root
+    from palace.core.resolve import resolve_file_target
 
-    row = palace.store.get_file_by_path(target)
-    if row is not None:
-        return row
-
-    target_path = Path(target)
-    if not target_path.is_absolute():
-        candidate = str(root / target_path)
-        row = palace.store.get_file_by_path(candidate)
-        if row is not None:
-            return row
-
-    suffix = target.lstrip("/")
-    for f in palace.store.get_all_files():
-        if f["path"].endswith(suffix):
-            return f
-    return None
+    return resolve_file_target(palace.store, target, palace.config.root)
 
 
 def _render_json(result: object) -> None:

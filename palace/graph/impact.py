@@ -5,8 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from palace.core.logging import get_logger
+
 if TYPE_CHECKING:
     from palace.storage.duckdb_store import DuckDBStore
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -56,12 +60,14 @@ class ImpactAnalyzer:
         try:
             cochange = self._store.get_cochange_pairs(file_id, min_co_commits=2)
         except Exception:
+            logger.debug("No cochange data for file_id=%d", file_id)
             cochange = []
 
         # 4. Ownership (graceful if no git data)
         try:
             ownership = self._store.get_file_ownership(file_id)
         except Exception:
+            logger.debug("No ownership data for file_id=%d", file_id)
             ownership = []
 
         # 5. Churn (graceful if no git data)
@@ -69,6 +75,7 @@ class ImpactAnalyzer:
             churn_list = self._store.get_churn(file_id=file_id, days=90)
             churn = churn_list[0] if churn_list else None
         except Exception:
+            logger.debug("No churn data for file_id=%d", file_id)
             churn = None
 
         # 6. Test files among dependents
@@ -102,11 +109,8 @@ class ImpactAnalyzer:
         return self.analyze_file(file_id)
 
     def _file_for_id(self, file_id: int) -> dict | None:
-        """Look up a file row by id."""
-        for f in self._store.get_all_files():
-            if f["file_id"] == file_id:
-                return f
-        return None
+        """Look up a file row by id via O(1) index lookup."""
+        return self._store.get_file_by_id(file_id)
 
 
 # ---------------------------------------------------------------------------

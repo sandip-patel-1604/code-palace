@@ -75,36 +75,11 @@ def deps_command(
 
 
 def _resolve_target(palace: Palace, target: str) -> dict | None:
-    """Find the file record matching target path.
-
-    Tries exact match, then match relative to config.root, then basename match.
-    """
+    """Find the file record matching target path via shared resolver."""
     assert palace.store is not None
-    root = palace.config.root
+    from palace.core.resolve import resolve_file_target
 
-    # Normalise the target path
-    target_path = Path(target)
-
-    # 1. Exact match against stored path
-    row = palace.store.get_file_by_path(target)
-    if row is not None:
-        return row
-
-    # 2. Resolve relative to config.root and try again
-    if not target_path.is_absolute():
-        candidate = str(root / target_path)
-        row = palace.store.get_file_by_path(candidate)
-        if row is not None:
-            return row
-
-    # 3. Scan all files and match by suffix (path ends-with)
-    all_files = palace.store.get_all_files()
-    suffix = target.lstrip("/")
-    for f in all_files:
-        if f["path"].endswith(suffix):
-            return f
-
-    return None
+    return resolve_file_target(palace.store, target, palace.config.root)
 
 
 def _run_deps(

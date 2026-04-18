@@ -405,3 +405,34 @@ class TestClearAndReuse:
         """T_2.10: Calling clear() on an already-empty store must not raise."""
         store.clear()  # No data — all DELETE / loop body should be no-ops
         store.clear()  # Second call on empty store must also be harmless
+
+
+# ---------------------------------------------------------------------------
+# T_14.4 — File Lookup by ID
+# ---------------------------------------------------------------------------
+
+
+class TestFileByIdLookup:
+    """T_14.4: O(1) file lookup by primary key."""
+
+    def test_found(self, store: DuckDBStore) -> None:
+        """T_14.4.1: get_file_by_id returns correct dict for a valid file_id."""
+        fid = store.upsert_file(_file("lookup.py"))
+        row = store.get_file_by_id(fid)
+        assert row is not None
+        assert row["file_id"] == fid
+        assert row["path"] == "lookup.py"
+
+    def test_not_found(self, store: DuckDBStore) -> None:
+        """T_14.4.2: get_file_by_id returns None for nonexistent ID."""
+        result = store.get_file_by_id(99999)
+        assert result is None
+
+    def test_same_shape_as_get_all_files(self, store: DuckDBStore) -> None:
+        """T_14.4.3: returned dict has same keys as get_all_files() dicts."""
+        fid = store.upsert_file(_file("shape.py"))
+        by_id = store.get_file_by_id(fid)
+        all_files = store.get_all_files()
+        assert by_id is not None
+        assert len(all_files) == 1
+        assert set(by_id.keys()) == set(all_files[0].keys())

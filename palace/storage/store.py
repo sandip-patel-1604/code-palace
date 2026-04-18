@@ -85,8 +85,16 @@ class Store(Protocol):
         """Insert a symbol row.  Returns the symbol_id."""
         ...
 
+    def upsert_symbols_batch(self, records: list[SymbolRecord]) -> list[int]:
+        """Insert multiple symbol rows.  Returns list of symbol_ids."""
+        ...
+
     def upsert_edge(self, record: EdgeRecord) -> None:
         """Insert an edge row."""
+        ...
+
+    def upsert_edges_batch(self, records: list[EdgeRecord]) -> None:
+        """Insert multiple edge rows."""
         ...
 
     def get_symbols(
@@ -123,6 +131,10 @@ class Store(Protocol):
         """
         ...
 
+    def get_file_by_id(self, file_id: int) -> dict | None:
+        """Return the file row for file_id, or None if not found."""
+        ...
+
     def get_file_by_path(self, path: str) -> dict | None:
         """Return the file row for path, or None if not found."""
         ...
@@ -133,6 +145,10 @@ class Store(Protocol):
 
     def upsert_import(self, record: ImportRecord) -> int:
         """Insert an import declaration row.  Returns the import_id."""
+        ...
+
+    def upsert_imports_batch(self, records: list[ImportRecord]) -> list[int]:
+        """Insert multiple import rows.  Returns list of import_ids."""
         ...
 
     def resolve_import(self, import_id: int, resolved_file_id: int) -> None:
